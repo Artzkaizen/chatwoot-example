@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import ChatWootWidget from "@/components/chatwoot";
@@ -20,7 +21,24 @@ const websiteToken = "5t4cpui2gPedn1QY4ZygLmD8";
 const baseUrl = "https://chatwoot.artzkaizen.com/";
 const locale = "en";
 const colorScheme = "dark";
-export default function HomeScreen() {
+
+export default function Index() {
+  const router = useRouter();
+
+  const startChat = () => {
+    router.push("/chat");
+  };
+
+  return (
+    <View style={styles.container}>
+      <TouchableOpacity style={styles.button} onPress={startChat}>
+        <Text style={styles.buttonText}>Start Chat</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+export function HomeScreen() {
   const [showWidget, toggleWidget] = useState(false);
 
   const notifications = useNotifications();
@@ -28,7 +46,6 @@ export default function HomeScreen() {
   if (notifications.error) {
     return <Text>Error: {notifications.error.message}</Text>;
   }
-
   return (
     <View>
       <View>
@@ -72,25 +89,19 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    padding: 20,
   },
-
   button: {
     height: 48,
-    marginTop: 32,
-    paddingTop: 8,
-    paddingBottom: 8,
+    paddingHorizontal: 32,
     backgroundColor: "#1F93FF",
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#fff",
     justifyContent: "center",
+    alignItems: "center",
   },
   buttonText: {
     color: "#fff",
-    textAlign: "center",
-    paddingLeft: 10,
-    fontWeight: "600",
     fontSize: 16,
-    paddingRight: 10,
+    fontWeight: "600",
   },
 });

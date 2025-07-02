@@ -63,10 +63,10 @@ export function NotificationsProvider({
 
   useEffect(() => {
     // Set up notification listeners
-    registerForPushNotifications().then(
-      (token) => setPushToken(token),
-      (error) => setError(error)
-    );
+    // registerForPushNotifications().then(
+    //   (token) => setPushToken(token),
+    //   (error) => setError(error)
+    // );
     notificationListener.current =
       Notifications.addNotificationReceivedListener(
         (notification: Notifications.Notification) => {
