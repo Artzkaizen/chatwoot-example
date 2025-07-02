@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "523201848394",
+    "project_id": "chatwoot-7d88f",
+    "storage_bucket": "chatwoot-7d88f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:523201848394:android:aa299fae20670b606ef2b3",
+        "android_client_info": {
+          "package_name": "com.artzkaizen.chatwootexample"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCb1Y8ifmI34bsvQpKBPxLIJ8qfNN1qyxY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

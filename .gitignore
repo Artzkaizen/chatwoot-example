@@ -37,3 +37,8 @@ yarn-error.*
 *.tsbuildinfo
 
 app-example
+/ios
+/android
+
+GoogleService-Info.plist
+chatwoot-7d88f-firebase-adminsdk-fbsvc-882e830390.json
