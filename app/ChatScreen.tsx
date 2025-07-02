@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Notifications from "expo-notifications";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -11,6 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { usePushNotifications } from "../hooks/usePushNotifications";
 
 interface Message {
   id: string;
@@ -37,6 +39,7 @@ const CHATWOOT_CONFIG = {
   inboxIdentifier: "9D5wpAc4dt4kRGhR6scDUkTp",
   apiUrl: "https://chatwoot.artzkaizen.com/public/api/v1/",
   wsUrl: "wss://chatwoot.artzkaizen.com/cable",
+  websiteToken: "YOUR_WEBSITE_TOKEN", // Add your website token here
 };
 
 export default function ChatScreen() {
@@ -51,8 +54,29 @@ export default function ChatScreen() {
     conversationId: "",
   });
 
+  const { expoPushToken, notification } = usePushNotifications();
+
+  // Log push notification status
   useEffect(() => {
-    setupChatwootConnection();
+    if (expoPushToken) {
+      console.log("Push token ready:", expoPushToken.data);
+    } else {
+      console.log("Waiting for push token...");
+    }
+  }, [expoPushToken]);
+
+  useEffect(() => {
+    if (notification) {
+      console.log("Received notification:", notification);
+      const notificationData = notification.request.content.data;
+      if (notificationData.conversationId === chatwootData.conversationId) {
+        // Handle chat-specific notification
+      }
+    }
+  }, [notification, chatwootData.conversationId]);
+
+  useEffect(() => {
+    setupInitialConnection();
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
@@ -60,25 +84,48 @@ export default function ChatScreen() {
     };
   }, []);
 
-  const setupChatwootConnection = async () => {
+  const setupInitialConnection = async () => {
     try {
       setIsLoading(true);
       setConnectionStatus("Setting up contact...");
       const contactData = await setupContact();
 
-      setConnectionStatus("Creating conversation...");
-      // Wait a moment for state to update
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Register token with Chatwoot if available
+      if (expoPushToken?.data) {
+        try {
+          const response = await fetch(
+            `${CHATWOOT_CONFIG.apiUrl}/api/v1/widget/push_tokens`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                api_access_token: CHATWOOT_CONFIG.websiteToken,
+              },
+              body: JSON.stringify({
+                subscription_type: "expo",
+                subscription_attributes: {
+                  push_token: expoPushToken.data,
+                  user_id: contactData.source_id,
+                },
+              }),
+            }
+          );
 
-      const conversationData = await setupConversation();
-      console.log("Conversation setup complete:", conversationData);
+          if (!response.ok) {
+            throw new Error("Failed to register push token with Chatwoot");
+          }
+          console.log("Push token registered with Chatwoot");
+        } catch (error) {
+          console.error("Failed to register push token:", error);
+        }
+      }
 
       setConnectionStatus("Connecting to chat...");
       initializeWebSocket();
 
       setIsLoading(false);
     } catch (error: unknown) {
-      console.error("Error setting up Chatwoot:", error);
+      console.error("Error setting up initial connection:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Failed to initialize chat";
       setConnectionStatus(`Error: ${errorMessage}`);
@@ -183,14 +230,23 @@ export default function ChatScreen() {
   const sendMessage = async (content: string) => {
     try {
       console.log("Sending message...");
-      console.log("Current chatwootData:", chatwootData);
 
-      if (!chatwootData.contactIdentifier || !chatwootData.conversationId) {
-        throw new Error("Contact or conversation not set up properly");
+      // Get or create conversation
+      let conversationId = chatwootData.conversationId;
+
+      if (!conversationId) {
+        setConnectionStatus("Creating conversation...");
+        const conversationData = await setupConversation();
+        conversationId = conversationData.id.toString();
+        setConnectionStatus("Connected");
+      }
+
+      if (!chatwootData.contactIdentifier) {
+        throw new Error("Contact not set up properly");
       }
 
       const response = await fetch(
-        `${CHATWOOT_CONFIG.apiUrl}inboxes/${CHATWOOT_CONFIG.inboxIdentifier}/contacts/${chatwootData.contactIdentifier}/conversations/${chatwootData.conversationId}/messages`,
+        `${CHATWOOT_CONFIG.apiUrl}inboxes/${CHATWOOT_CONFIG.inboxIdentifier}/contacts/${chatwootData.contactIdentifier}/conversations/${conversationId}/messages`,
         {
           method: "POST",
           headers: {
@@ -274,16 +330,34 @@ export default function ChatScreen() {
     };
   };
 
-  const addMessage = (author: string, content: string) => {
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        author,
-        content,
-        timestamp: Date.now(),
-      },
-    ]);
+  const addMessage = async (author: string, content: string) => {
+    const newMessage = {
+      id: Date.now().toString(),
+      author,
+      content,
+      timestamp: Date.now(),
+    };
+
+    setMessages((prev) => [...prev, newMessage]);
+
+    // Show notification for incoming messages when app is in background
+    if (author !== "me") {
+      try {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: `New message from ${author}`,
+            body: content,
+            data: {
+              conversationId: chatwootData.conversationId,
+              messageId: newMessage.id,
+            },
+          },
+          trigger: null, // null means show immediately
+        });
+      } catch (err) {
+        console.error("Failed to show notification:", err);
+      }
+    }
   };
 
   const renderMessage = ({ item }: { item: Message }) => (
@@ -302,6 +376,9 @@ export default function ChatScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.statusText}>{connectionStatus}</Text>
+        <Text style={styles.tokenText}>
+          Push Token: {expoPushToken?.data ?? "Not available"}
+        </Text>
       </View>
 
       {isLoading ? (
@@ -401,5 +478,10 @@ const styles = StyleSheet.create({
     borderColor: "#ddd",
     borderRadius: 20,
     backgroundColor: "#fff",
+  },
+  tokenText: {
+    fontSize: 12,
+    color: "#666",
+    marginTop: 4,
   },
 });

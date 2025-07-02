@@ -6,6 +6,40 @@ import { Platform } from "react-native";
 
 const DEVICE_TOKEN_KEY = "chatwoot_device_token";
 
+// Configure notification categories/actions
+Notifications.setNotificationCategoryAsync("CHAT", [
+  {
+    identifier: "REPLY",
+    buttonTitle: "Reply",
+    options: {
+      opensAppToForeground: true,
+    },
+  },
+  {
+    identifier: "MARK_READ",
+    buttonTitle: "Mark as Read",
+    options: {
+      opensAppToForeground: false,
+    },
+  },
+]);
+
+export async function scheduleLocalNotification(
+  title: string,
+  body: string,
+  data?: any
+) {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title,
+      body,
+      data,
+      categoryIdentifier: "CHAT",
+    },
+    trigger: null, // null means show immediately
+  });
+}
+
 export async function registerForPushNotifications(
   baseUrl: string,
   websiteToken: string,

@@ -12,8 +12,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.artzkaizen.chatwootexample",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": ["remote-notification"]
+      },
+      "appleTeamId": "4RS97TDH36"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,7 +24,8 @@
       },
       "googleServicesFile": "./google-services.json",
       "edgeToEdgeEnabled": true,
-      "package": "com.artzkaizen.chatwootexample"
+      "package": "com.artzkaizen.chatwootexample",
+      "useNextNotificationsApi": true
     },
     "web": {
       "bundler": "metro",
@@ -38,6 +41,13 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#ffffff"
         }
       ]
     ],

@@ -61,6 +61,9 @@ export function NotificationsProvider({
   const notificationListener = useRef<Subscription | null>(null);
   const responseListener = useRef<Subscription | null>(null);
 
+  console.log("pushToken", pushToken);
+  console.log("isRegistered", isRegistered);
+
   useEffect(() => {
     // Set up notification listeners
     // registerForPushNotifications().then(
