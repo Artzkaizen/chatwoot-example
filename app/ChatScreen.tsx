@@ -197,6 +197,17 @@ export default function ChatScreen() {
           headers: {
             "Content-Type": "application/json",
           },
+          body: JSON.stringify({
+            contact: {
+              name: DEMO_USER.name,
+              email: DEMO_USER.email,
+            },
+            message: {
+              content: "Started a new conversation",
+              echo_id: Date.now().toString(),
+            },
+            status: "open",
+          }),
         }
       );
 
@@ -272,9 +283,10 @@ export default function ChatScreen() {
       const data = await response.json();
       console.log("Message sent successfully:", data);
 
+      // Add message to local state
       addMessage("me", content);
       setInputText("");
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error in sendMessage:", error);
       setConnectionStatus(`Error: ${error?.message || "Unknown error"}`);
       throw error;
@@ -286,9 +298,10 @@ export default function ChatScreen() {
     wsRef.current = new WebSocket(CHATWOOT_CONFIG.wsUrl);
 
     wsRef.current.onopen = () => {
-      setConnectionStatus("Connected");
+      setConnectionStatus("Connected to Chatwoot");
       // Subscribe to Chatwoot webhooks
       if (wsRef.current && chatwootData.contactPubsubToken) {
+        console.log("Subscribing with token:", chatwootData.contactPubsubToken);
         wsRef.current.send(
           JSON.stringify({
             command: "subscribe",
@@ -304,33 +317,52 @@ export default function ChatScreen() {
     console.log("WebSocket initialized");
 
     wsRef.current.onmessage = (event) => {
-      console.log("WebSocket message received");
+      console.log("WebSocket message received:", event.data);
       try {
         const json = JSON.parse(event.data);
 
+        // Handle subscription confirmation
+        if (json.type === "confirm_subscription") {
+          console.log("Successfully subscribed to WebSocket");
+        }
+
+        // Handle message events
         if (json.message?.event === "message.created") {
           const messageData = json.message.data;
+          console.log("Message created event:", messageData);
+
+          // message_type: 0 is user message, 1 is agent message
           if (messageData.message_type === 1) {
-            // Incoming message from agent
-            addMessage(messageData.sender.name, messageData.content);
+            console.log("Agent message received:", messageData.content);
+            addMessage(
+              messageData.sender?.name || "Agent",
+              messageData.content
+            );
           }
         }
+
+        // Handle conversation events
+        if (json.message?.event === "conversation.created") {
+          console.log("New conversation created:", json.message.data);
+        }
       } catch (error) {
-        console.error("WebSocket message error:", error);
+        console.error("WebSocket message parsing error:", error);
       }
     };
 
     wsRef.current.onerror = (e) => {
-      setConnectionStatus("Error");
-      console.log("WebSocket error:", e);
+      console.error("WebSocket error:", e);
+      setConnectionStatus("WebSocket Error");
     };
 
     wsRef.current.onclose = () => {
+      console.log("WebSocket connection closed");
       setConnectionStatus("Disconnected");
     };
   };
 
   const addMessage = async (author: string, content: string) => {
+    console.log(`Adding message from ${author}: ${content}`);
     const newMessage = {
       id: Date.now().toString(),
       author,
@@ -352,7 +384,7 @@ export default function ChatScreen() {
               messageId: newMessage.id,
             },
           },
-          trigger: null, // null means show immediately
+          trigger: null,
         });
       } catch (err) {
         console.error("Failed to show notification:", err);
@@ -367,8 +399,17 @@ export default function ChatScreen() {
         item.author === "me" ? styles.myMessage : styles.theirMessage,
       ]}
     >
-      <Text style={styles.messageAuthor}>{item.author}</Text>
-      <Text style={styles.messageContent}>{item.content}</Text>
+      {item.author !== "me" && (
+        <Text style={styles.messageAuthor}>{item.author}</Text>
+      )}
+      <Text
+        style={[
+          styles.messageContent,
+          item.author === "me" ? { color: "#fff" } : { color: "#000" },
+        ]}
+      >
+        {item.content}
+      </Text>
     </View>
   );
 
