@@ -1,5 +1,3 @@
-Perfect — since you're using **Expo (React Native)** for the app, and want to build a **client-to-client chat system (buyer ↔ vendor)** using **Chatwoot**, here’s a **clear breakdown of the architecture and flow** tailored for **mobile apps** using Expo.
-
 ---
 
 # 🧭 FLOW: Buyer ↔ Vendor Chat Using Chatwoot + Expo
