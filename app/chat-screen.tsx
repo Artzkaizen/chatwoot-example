@@ -40,6 +40,8 @@ const CHATWOOT_CONFIG = {
   apiUrl: "https://chatwoot.artzkaizen.com/public/api/v1/",
   wsUrl: "wss://chatwoot.artzkaizen.com/cable",
   websiteToken: "YOUR_WEBSITE_TOKEN", // Add your website token here
+  reconnectInterval: 3000, // 3 seconds between reconnection attempts
+  maxReconnectAttempts: 5,
 };
 
 export default function ChatScreen() {
@@ -48,6 +50,9 @@ export default function ChatScreen() {
   const [connectionStatus, setConnectionStatus] = useState("Initializing...");
   const [isLoading, setIsLoading] = useState(true);
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const messageCounterRef = useRef(0);
   const [chatwootData, setChatwootData] = useState({
     contactIdentifier: "",
     contactPubsubToken: "",
@@ -190,6 +195,46 @@ export default function ChatScreen() {
       console.log("Setting up conversation...");
       console.log("Current chatwootData:", chatwootData);
 
+      // First try to fetch existing conversations
+      const existingConversationsResponse = await fetch(
+        `${CHATWOOT_CONFIG.apiUrl}inboxes/${CHATWOOT_CONFIG.inboxIdentifier}/contacts/${DEMO_USER.identifier}/conversations`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (existingConversationsResponse.ok) {
+        const conversations = await existingConversationsResponse.json();
+        console.log("Existing conversations:", conversations);
+
+        // Find the most recent open conversation
+        const activeConversation = conversations.find(
+          (conv: any) => conv.status === "open"
+        );
+
+        if (activeConversation) {
+          console.log("Found active conversation:", activeConversation);
+
+          // Update state first
+          setChatwootData((prev) => ({
+            ...prev,
+            conversationId: activeConversation.id.toString(),
+          }));
+
+          // Then store in AsyncStorage
+          await AsyncStorage.setItem(
+            "contactConversation",
+            activeConversation.id.toString()
+          );
+
+          return activeConversation;
+        }
+      }
+
+      // If no existing conversation found, create a new one
       const response = await fetch(
         `${CHATWOOT_CONFIG.apiUrl}inboxes/${CHATWOOT_CONFIG.inboxIdentifier}/contacts/${DEMO_USER.identifier}/conversations`,
         {
@@ -220,7 +265,7 @@ export default function ChatScreen() {
       }
 
       const data = await response.json();
-      console.log("Conversation created:", data);
+      console.log("New conversation created:", data);
 
       // Update state first
       setChatwootData((prev) => ({
@@ -295,10 +340,19 @@ export default function ChatScreen() {
 
   const initializeWebSocket = () => {
     console.log("Initializing WebSocket");
+
+    // Clear any existing reconnection timeout
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
     wsRef.current = new WebSocket(CHATWOOT_CONFIG.wsUrl);
 
     wsRef.current.onopen = () => {
       setConnectionStatus("Connected to Chatwoot");
+      reconnectAttemptsRef.current = 0; // Reset reconnection attempts on successful connection
+
       // Subscribe to Chatwoot webhooks
       if (wsRef.current && chatwootData.contactPubsubToken) {
         console.log("Subscribing with token:", chatwootData.contactPubsubToken);
@@ -344,6 +398,15 @@ export default function ChatScreen() {
         // Handle conversation events
         if (json.message?.event === "conversation.created") {
           console.log("New conversation created:", json.message.data);
+          // Store the conversation ID if we don't have one
+          if (!chatwootData.conversationId) {
+            const conversationId = json.message.data.id.toString();
+            setChatwootData((prev) => ({
+              ...prev,
+              conversationId,
+            }));
+            AsyncStorage.setItem("contactConversation", conversationId);
+          }
         }
       } catch (error) {
         console.error("WebSocket message parsing error:", error);
@@ -358,13 +421,86 @@ export default function ChatScreen() {
     wsRef.current.onclose = () => {
       console.log("WebSocket connection closed");
       setConnectionStatus("Disconnected");
+
+      // Attempt to reconnect if we haven't exceeded max attempts
+      if (reconnectAttemptsRef.current < CHATWOOT_CONFIG.maxReconnectAttempts) {
+        reconnectAttemptsRef.current += 1;
+        console.log(
+          `Attempting to reconnect (${reconnectAttemptsRef.current}/${CHATWOOT_CONFIG.maxReconnectAttempts})`
+        );
+
+        reconnectTimeoutRef.current = setTimeout(() => {
+          if (chatwootData.contactPubsubToken) {
+            initializeWebSocket();
+          }
+        }, CHATWOOT_CONFIG.reconnectInterval);
+      } else {
+        console.log("Max reconnection attempts reached");
+        setConnectionStatus("Connection failed. Please try again later.");
+      }
     };
   };
 
+  const fetchMessageHistory = async (conversationId: string) => {
+    try {
+      console.log("Fetching message history...");
+      const response = await fetch(
+        `${CHATWOOT_CONFIG.apiUrl}inboxes/${CHATWOOT_CONFIG.inboxIdentifier}/contacts/${DEMO_USER.identifier}/conversations/${conversationId}/messages`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch message history");
+      }
+
+      const data = await response.json();
+      console.log("Message history:", data);
+
+      // Process messages and add them to state
+      data.forEach((message: any) => {
+        const author =
+          message.message_type === 0 ? "me" : message.sender?.name || "Agent";
+        addMessage(author, message.content);
+      });
+    } catch (error) {
+      console.error("Error fetching message history:", error);
+    }
+  };
+
+  // Load existing conversation ID on mount
+  useEffect(() => {
+    const loadConversationId = async () => {
+      try {
+        const savedConversationId = await AsyncStorage.getItem(
+          "contactConversation"
+        );
+        if (savedConversationId) {
+          setChatwootData((prev) => ({
+            ...prev,
+            conversationId: savedConversationId,
+          }));
+
+          // Fetch message history for the existing conversation
+          await fetchMessageHistory(savedConversationId);
+        }
+      } catch (error) {
+        console.error("Error loading conversation ID:", error);
+      }
+    };
+
+    loadConversationId();
+  }, []);
+
   const addMessage = async (author: string, content: string) => {
     console.log(`Adding message from ${author}: ${content}`);
+    messageCounterRef.current += 1;
     const newMessage = {
-      id: Date.now().toString(),
+      id: `${Date.now()}-${messageCounterRef.current}`,
       author,
       content,
       timestamp: Date.now(),
@@ -435,6 +571,7 @@ export default function ChatScreen() {
             keyExtractor={(item) => item.id}
             style={styles.messageList}
             inverted={false}
+            contentContainerStyle={styles.messageListContent}
           />
 
           <KeyboardAvoidingView
@@ -485,6 +622,10 @@ const styles = StyleSheet.create({
   messageList: {
     flex: 1,
     padding: 10,
+  },
+  messageListContent: {
+    flexGrow: 1,
+    justifyContent: "flex-end",
   },
   messageContainer: {
     marginVertical: 5,

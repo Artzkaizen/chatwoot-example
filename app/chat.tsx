@@ -1,4 +1,4 @@
-import ChatScreen from "./ChatScreen";
+import ChatScreen from "./chat-screen";
 
 export default function ChatRoute() {
   return <ChatScreen />;
