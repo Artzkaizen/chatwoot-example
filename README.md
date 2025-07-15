@@ -1,14 +1,6 @@
-Great! If each **buyer can chat with multiple vendors**, and each conversation is **separate per vendor**, then you need to structure your **Chatwoot integration** to support:
-
-* ✅ One **conversation per buyer-vendor pair**
-* ✅ The ability to **send/receive** messages per conversation
-* ✅ The ability to **list** all active conversations (e.g. for a buyer’s inbox view)
-
-Below is the **updated flow and structure** specifically for this buyer↔multiple vendors chat setup, including how to handle conversations, messages, and contact management in your **Expo + Backend + Chatwoot** stack.
-
 ---
 
-# 🧾 Updated Chatwoot Integration: Buyer ↔ Multiple Vendors
+# 🧾  Chatwoot Integration: Buyer ↔ Multiple Vendors
 
 ---
 
